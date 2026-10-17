@@ -93,6 +93,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
@@ -3588,12 +3589,14 @@ public class TelephonyProvider extends ContentProvider
             if (VDBG) log("onCreate: newBuildId is empty");
         }
 
-        if (isNewBuild) {
-            if (!apnSourceServiceExists(getContext())) {
-                // Update APN DB
-                updateApnDb();
-            }
+        // The apns-conf checksum decides whether to reload, so check it on every start: a
+        // build can change the file without changing ro.build.id.
+        if (!apnSourceServiceExists(getContext())) {
+            // Update APN DB
+            updateApnDb();
+        }
 
+        if (isNewBuild) {
             // Add all APN related shared prefs to local log for dumpsys
             if (DBG) addAllApnSharedPrefToLocalLog();
         }
@@ -5982,7 +5985,8 @@ public class TelephonyProvider extends ContentProvider
         // To avoid loading APNs twice call getWritableDatabase() before needApnDbUpdate()
         SQLiteDatabase db = getWritableDatabase();
 
-        if (!needApnDbUpdate()) {
+        // An empty table is reloaded even if apn-conf has not changed.
+        if (!needApnDbUpdate() && DatabaseUtils.queryNumEntries(db, CARRIERS_TABLE) > 0) {
             log("Skipping apn db update since apn-conf has not changed.");
             return;
         }
